@@ -22,6 +22,10 @@ st.set_page_config(page_title="Regulatory Tracker", layout="wide")
 
 st.title("Regulatory Tracker")
 
+input = st.text_input("Enter your regulatory topic you want to retrieve the news", type="default")
+submit = st.button("Submit")
+
+
 from crewai_tools import ScrapeWebsiteTool, WebsiteSearchTool
 
 scrape_tool = ScrapeWebsiteTool(
@@ -64,9 +68,9 @@ scraper_agent = Agent(
       # Content Analyzer Agent
 analyzer_agent = Agent(
           role='Content Analyzer',
-          goal='Analyze content for Anti-Money Laundering relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link',
+          goal='Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link',
           backstory="""You are a financial regulation expert specialized in
-          Anti-Money Laundering.""",
+          {input}.""",
           verbose=True,
           allow_delegation=True
       )
@@ -93,13 +97,13 @@ analysis_task = Task(
           1. Check the link if it redirect to the correct relevant updates page
           2. If the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link
           2. Review the scraped content
-          3. Identify any mentions or relevance to Anti-Money Laundering
+          3. Identify any mentions or relevance to {input}
           4. Extract key points and regulatory implications
           5. Categorize the importance of each update
           """,
           agent=analyzer_agent,
           tools=[scrape_validate_link_tool, web_search_validate_link_tool],
-          expected_output="A list of Anti-Money Laundering-related findings with key points, regulatory implications, and categorization of importance.",
+          expected_output="A list of {input}-related findings with key points, regulatory implications, and categorization of importance.",
           output_json=News,
       )
 
@@ -110,21 +114,24 @@ crew = Crew(
             verbose=True,
         )
 
-result = crew.kickoff()
-
 import json
 import pandas as pd
 from datetime import datetime
 
-# Get the raw output from CrewOutput
+if submit and input:
 
-print(f"Raw Output: {result.raw}")
-if result.json_dict:
-    print(f"JSON Output: {json.dumps(result.json_dict, indent=2)}")
-if result.pydantic:
-    print(f"Pydantic Output: {result.pydantic}")
-print(f"Tasks Output: {result.tasks_output}")
-print(f"Token Usage: {result.token_usage}")
+    with st.spinner('AI Agent processing...'):
+        
+        result = crew.kickoff()
 
-# Use st.write instead of st.print
-st.text(f"Tasks Output: {result.tasks_output}")
+        # Get the raw output from CrewOutput
+        print(f"Raw Output: {result.raw}")
+        if result.json_dict:
+            print(f"JSON Output: {json.dumps(result.json_dict, indent=2)}")
+        if result.pydantic:
+            print(f"Pydantic Output: {result.pydantic}")
+        print(f"Tasks Output: {result.tasks_output}")
+        print(f"Token Usage: {result.token_usage}")
+
+        # Use st.write instead of st.print
+        st.text(f"Tasks Output: {result.tasks_output}")
