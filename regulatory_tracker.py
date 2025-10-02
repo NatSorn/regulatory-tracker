@@ -26,17 +26,20 @@ input = st.text_input("Enter your regulatory topic you want to retrieve the news
 submit = st.button("Submit")
 
 
-from crewai_tools import ScrapeWebsiteTool, WebsiteSearchTool
+from crewai_tools import ScrapeWebsiteTool, WebsiteSearchTool, ScrapeElementFromWebsiteTool
+
 
 scrape_tool = ScrapeWebsiteTool(
-    website='https://www.centralbank.ie/news-media/press-releases',
+    website='https://www.centralbank.ie/search-results#',
 
   )
 
 web_search_tool = WebsiteSearchTool(
-    website='https://www.centralbank.ie/news-media/press-releases',
+    website='https://www.centralbank.ie/search-results#',
 
 )
+
+url_scrape_tool = ScrapeElementFromWebsiteTool()
 
 scrape_validate_link_tool = ScrapeWebsiteTool()
 web_search_validate_link_tool = WebsiteSearchTool()
@@ -55,41 +58,80 @@ class News(BaseModel):
     News_Date: str
     News_Link: str
 
- # Web Scraper Agent
+# Web Searcher Agent (move outside the News model)
+searcher_agent = Agent(
+    role='Web Searcher',
+    goal='Efficiently search and identify relevant {input} from Central Bank of Ireland website',
+    backstory="""You are an expert web searcher specialized in finding
+    information from financial regulatory websites.""",
+    verbose=True,
+    allow_delegation=False
+)
+
 scraper_agent = Agent(
-  role='Web Scraper',
-          goal='Efficiently scrape and extract content from Central Bank of Ireland website',
-          backstory="""You are an expert web scraper specialized in extracting
-          information from financial regulatory websites.""",
-          verbose=True,
-          allow_delegation=False
-      )
+    role='Web Scraper',
+    goal='Efficiently scrape and extract search result under News & Media category from Central Bank of Ireland website',
+    backstory="""You are an expert web scraper specialized in extracting
+    information from financial regulatory websites.""",
+    verbose=True,
+    allow_delegation=False
+)
 
-      # Content Analyzer Agent
+# url_scraper_agent = Agent(
+#     role='URL Scraper',
+#     goal='Scrape the full URL link of each news url from span.path element by using the Scrape Element From Website Tool',
+#     backstory="""You are an expert web scraper specialized in extracting
+#     information from financial regulatory websites.""",
+#     verbose=True,
+#     allow_delegation=False
+# )
+
+# Content Analyzer Agent
 analyzer_agent = Agent(
-          role='Content Analyzer',
-          goal='Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link',
-          backstory="""You are a financial regulation expert specialized in
-          {input}.""",
-          verbose=True,
-          allow_delegation=True
+    role='Content Analyzer',
+    goal='Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link',
+    backstory="""You are a financial regulation expert specialized in
+    {input}.""",
+    verbose=True,
+    allow_delegation=True
+)
+
+searching_task = Task(
+          description="""
+          1. Visit the https://www.centralbank.ie/search-results#
+          2. Put {input} in the search bar to search for relevant news
+          """,
+          agent=searcher_agent,
+          tools=[scrape_tool, web_search_tool],
+          expected_output="A list of search results"
       )
 
-# Task 1: Scrape Website
+
 scraping_task = Task(
           description="""
-          1. Visit the Central Bank of Ireland news-media section
+          1. Visit the search result under News & Media category 
           2. Identify all updates from March 1, 2025 to present
-          3. Extract all content including dates, titles
-          4. Generate summary of the news
-          4. Extract the link of the specific news in this format, for example1: https://www.centralbank.ie/news/article/the-central-bank-takes-enforcement-action-against-swilly-mulroy-credit-union-for-breaches-of-anti-money-laundering-requirements , for example2: https://www.centralbank.ie/news/article/press-release-derville-rowland-appointed-to-executive-board-of-new-eu-authority-for-anti-money-laundering-23-May-25
-          5. Return the data in a structured format
+          3. Scrape all content including dates, titles
+          4. Scrape the url in the span.path element of each news from the search result by using the Scrape Element From Website Tool
+          5. Generate summary of the news
+          6. Return the data in a structured format
           """,
           agent=scraper_agent,
-          tools=[scrape_tool, web_search_tool],
-          expected_output="A structured dataset containing dates, titles, full text, and links of each relevant updates.",
+          tools=[scrape_tool],
+          expected_output="A structured dataset containing dates, titles, full text, and full URL link of each relevant updates.",
           output_json=News,
       )
+
+# url_scraping_task = Task(
+#           description="""
+#           1. Scrape the url in the span.path element of each news from the search result by using the Scrape Element From Website Tool
+#           2. Return the data in a News_Link field in the structured format
+#           """,
+#           agent=url_scraper_agent,
+#           tools=[url_scrape_tool],
+#           expected_output="A list of full URL links for each news article.",
+#           output_json=News,
+#       )
 
       # Task 2: Analyze Content
 analysis_task = Task(
@@ -108,8 +150,8 @@ analysis_task = Task(
       )
 
 crew = Crew(
-            agents=[scraper_agent, analyzer_agent],
-            tasks=[scraping_task,analysis_task],
+            agents=[searcher_agent, scraper_agent, analyzer_agent],
+            tasks=[searching_task, scraping_task,analysis_task],
             memory=True,
             verbose=True,
         )
@@ -117,21 +159,54 @@ crew = Crew(
 import json
 import pandas as pd
 from datetime import datetime
+import io
+import streamlit as st
 
 if submit and input:
 
     with st.spinner('AI Agent processing...'):
-        
         result = crew.kickoff()
 
         # Get the raw output from CrewOutput
         print(f"Raw Output: {result.raw}")
-        if result.json_dict:
-            print(f"JSON Output: {json.dumps(result.json_dict, indent=2)}")
+        # Convert Raw Output to DataFrame and assign to df
+        df = None
+        try:
+            if isinstance(result.raw, list):
+                df = pd.DataFrame(result.raw)
+            elif isinstance(result.raw, dict):
+                df = pd.DataFrame([result.raw])
+            elif isinstance(result.raw, str):
+                # Try to load string as JSON
+                raw_json = json.loads(result.raw)
+                if isinstance(raw_json, list):
+                    df = pd.DataFrame(raw_json)
+                elif isinstance(raw_json, dict):
+                    df = pd.DataFrame([raw_json])
+        except Exception as e:
+            st.warning(f"Could not convert Raw Output to DataFrame: {e}")
+        # Display DataFrame as Streamlit datatable only if df is defined
+        if df is not None:
+            if not df.empty:
+                # Create two columns: left for table, right for export button
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    # st.dataframe(df)
+                    st.table(df)
+                with col2:
+                    csv_buffer = io.StringIO()
+                    df.to_csv(csv_buffer, index=False)
+                    st.download_button(
+                        label="Export to CSV",
+                        data=csv_buffer.getvalue(),
+                        file_name="regulatory_news.csv",
+                        mime="text/csv"
+                    )
+            else:
+                st.warning("No data available to export.")
+        else:
+            st.warning("No tabular data found in Raw Output.")
         if result.pydantic:
             print(f"Pydantic Output: {result.pydantic}")
         print(f"Tasks Output: {result.tasks_output}")
         print(f"Token Usage: {result.token_usage}")
-
-        # Use st.write instead of st.print
-        st.text(f"Tasks Output: {result.tasks_output}")

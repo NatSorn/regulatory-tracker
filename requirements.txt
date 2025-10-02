@@ -8,3 +8,6 @@ langsmith
 streamlit
 pandas
 openai
+uv
+requests
+beautifulsoup4
