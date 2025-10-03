@@ -39,7 +39,7 @@ web_search_tool = WebsiteSearchTool(
 
 )
 
-url_scrape_tool = ScrapeElementFromWebsiteTool()
+element_scrape = ScrapeElementFromWebsiteTool()
 
 scrape_validate_link_tool = ScrapeWebsiteTool()
 web_search_validate_link_tool = WebsiteSearchTool()
@@ -61,7 +61,7 @@ class News(BaseModel):
 # Web Searcher Agent (move outside the News model)
 searcher_agent = Agent(
     role='Web Searcher',
-    goal='Efficiently search and identify relevant {input} from Central Bank of Ireland website',
+    goal=f"""Efficiently search and identify relevant {input} news from search bar under Search Results page""",
     backstory="""You are an expert web searcher specialized in finding
     information from financial regulatory websites.""",
     verbose=True,
@@ -70,7 +70,7 @@ searcher_agent = Agent(
 
 scraper_agent = Agent(
     role='Web Scraper',
-    goal='Efficiently scrape and extract search result under News & Media category from Central Bank of Ireland website',
+    goal='Efficiently scrape and extract search result under News & Media category',
     backstory="""You are an expert web scraper specialized in extracting
     information from financial regulatory websites.""",
     verbose=True,
@@ -89,17 +89,17 @@ scraper_agent = Agent(
 # Content Analyzer Agent
 analyzer_agent = Agent(
     role='Content Analyzer',
-    goal='Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link',
-    backstory="""You are a financial regulation expert specialized in
+    goal=f"""Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link""",
+    backstory=f"""You are a financial regulation expert specialized in
     {input}.""",
     verbose=True,
     allow_delegation=True
 )
 
 searching_task = Task(
-          description="""
+          description=f"""
           1. Visit the https://www.centralbank.ie/search-results#
-          2. Put {input} in the search bar to search for relevant news
+          2. Put {input} in the search bar under Search Results to search for relevant news
           """,
           agent=searcher_agent,
           tools=[scrape_tool, web_search_tool],
@@ -109,10 +109,10 @@ searching_task = Task(
 
 scraping_task = Task(
           description="""
-          1. Visit the search result under News & Media category 
+          1. Visit the Search Results section
           2. Identify all updates from March 1, 2025 to present
           3. Scrape all content including dates, titles
-          4. Scrape the url in the span.path element of each news from the search result by using the Scrape Element From Website Tool
+          4. Scrape the news url link of each news from the search result
           5. Generate summary of the news
           6. Return the data in a structured format
           """,
@@ -135,7 +135,7 @@ scraping_task = Task(
 
       # Task 2: Analyze Content
 analysis_task = Task(
-          description="""
+          description=f"""
           1. Check the link if it redirect to the correct relevant updates page
           2. If the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link
           2. Review the scraped content
@@ -145,7 +145,7 @@ analysis_task = Task(
           """,
           agent=analyzer_agent,
           tools=[scrape_validate_link_tool, web_search_validate_link_tool],
-          expected_output="A list of {input}-related findings with key points, regulatory implications, and categorization of importance.",
+          expected_output=f"""A list of {input}-related findings with key points, regulatory implications, and categorization of importance.""",
           output_json=News,
       )
 
@@ -167,9 +167,7 @@ if submit and input:
     with st.spinner('AI Agent processing...'):
         result = crew.kickoff()
 
-        # Get the raw output from CrewOutput
         print(f"Raw Output: {result.raw}")
-        # Convert Raw Output to DataFrame and assign to df
         df = None
         try:
             if isinstance(result.raw, list):
@@ -177,21 +175,28 @@ if submit and input:
             elif isinstance(result.raw, dict):
                 df = pd.DataFrame([result.raw])
             elif isinstance(result.raw, str):
-                # Try to load string as JSON
-                raw_json = json.loads(result.raw)
-                if isinstance(raw_json, list):
-                    df = pd.DataFrame(raw_json)
-                elif isinstance(raw_json, dict):
-                    df = pd.DataFrame([raw_json])
+                # Try to extract all JSON arrays or objects from the string
+                matches = re.findall(r'(\{.*?\}|\[.*?\])', result.raw, re.DOTALL)
+                for match in matches:
+                    try:
+                        raw_json = json.loads(match)
+                        if isinstance(raw_json, list):
+                            df = pd.DataFrame(raw_json)
+                            break
+                        elif isinstance(raw_json, dict):
+                            df = pd.DataFrame([raw_json])
+                            break
+                    except Exception:
+                        continue
+                if df is None:
+                    raise ValueError("No valid JSON found in Raw Output.")
         except Exception as e:
             st.warning(f"Could not convert Raw Output to DataFrame: {e}")
-        # Display DataFrame as Streamlit datatable only if df is defined
+
         if df is not None:
             if not df.empty:
-                # Create two columns: left for table, right for export button
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    # st.dataframe(df)
                     st.table(df)
                 with col2:
                     csv_buffer = io.StringIO()
