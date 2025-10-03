@@ -61,7 +61,7 @@ class News(BaseModel):
 # Web Searcher Agent (move outside the News model)
 searcher_agent = Agent(
     role='Web Searcher',
-    goal='Efficiently search and identify relevant {input} from Central Bank of Ireland website',
+    goal='Efficiently search and identify relevant {input} from https://www.centralbank.ie/search-results#',
     backstory="""You are an expert web searcher specialized in finding
     information from financial regulatory websites.""",
     verbose=True,
@@ -70,7 +70,7 @@ searcher_agent = Agent(
 
 scraper_agent = Agent(
     role='Web Scraper',
-    goal='Efficiently scrape and extract search result under News & Media category from Central Bank of Ireland website',
+    goal='Efficiently scrape and extract search result under News & Media category',
     backstory="""You are an expert web scraper specialized in extracting
     information from financial regulatory websites.""",
     verbose=True,
@@ -86,12 +86,12 @@ scraper_agent = Agent(
 #     allow_delegation=False
 # )
 
-# Content Analyzer Agent
+#Content Analyzer Agent
 analyzer_agent = Agent(
     role='Content Analyzer',
-    goal='Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link',
-    backstory="""You are a financial regulation expert specialized in
-    {input}.""",
+    goal='Analyze if the news relevance to {input} if not, ignore it',
+    # goal='Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link',
+    backstory="""You are a financial regulation expert specialized in {input}.""",
     verbose=True,
     allow_delegation=True
 )
@@ -136,12 +136,9 @@ scraping_task = Task(
       # Task 2: Analyze Content
 analysis_task = Task(
           description="""
-          1. Check the link if it redirect to the correct relevant updates page
-          2. If the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link
-          2. Review the scraped content
-          3. Identify any mentions or relevance to {input}
-          4. Extract key points and regulatory implications
-          5. Categorize the importance of each update
+          1. Review the scraped content
+          2. Identify if the news relevance to {input}
+          3. Return the relevant news in a structured format
           """,
           agent=analyzer_agent,
           tools=[scrape_validate_link_tool, web_search_validate_link_tool],
@@ -151,7 +148,7 @@ analysis_task = Task(
 
 crew = Crew(
             agents=[searcher_agent, scraper_agent, analyzer_agent],
-            tasks=[searching_task, scraping_task,analysis_task],
+            tasks=[searching_task, scraping_task, analysis_task],
             memory=True,
             verbose=True,
         )
