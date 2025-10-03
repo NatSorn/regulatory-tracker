@@ -161,15 +161,14 @@ import pandas as pd
 from datetime import datetime
 import io
 import streamlit as st
+import re
 
 if submit and input:
 
     with st.spinner('AI Agent processing...'):
         result = crew.kickoff()
 
-        # Get the raw output from CrewOutput
         print(f"Raw Output: {result.raw}")
-        # Convert Raw Output to DataFrame and assign to df
         df = None
         try:
             if isinstance(result.raw, list):
@@ -177,33 +176,36 @@ if submit and input:
             elif isinstance(result.raw, dict):
                 df = pd.DataFrame([result.raw])
             elif isinstance(result.raw, str):
-                # Try to load string as JSON
-                raw_json = json.loads(result.raw)
-                if isinstance(raw_json, list):
-                    df = pd.DataFrame(raw_json)
-                elif isinstance(raw_json, dict):
-                    df = pd.DataFrame([raw_json])
+                # Try to extract all JSON arrays or objects from the string
+                matches = re.findall(r'(\{.*?\}|\[.*?\])', result.raw, re.DOTALL)
+                for match in matches:
+                    try:
+                        raw_json = json.loads(match)
+                        if isinstance(raw_json, list):
+                            df = pd.DataFrame(raw_json)
+                            break
+                        elif isinstance(raw_json, dict):
+                            df = pd.DataFrame([raw_json])
+                            break
+                    except Exception:
+                        continue
+                if df is None:
+                    raise ValueError("No valid JSON found in Raw Output.")
         except Exception as e:
             st.warning(f"Could not convert Raw Output to DataFrame: {e}")
-        # Display DataFrame as Streamlit datatable only if df is defined
-        if df is not None:
-            if not df.empty:
-                # Create two columns: left for table, right for export button
-                col1, col2 = st.columns([4, 1])
-                with col2:
-                    # st.dataframe(df)
-                    csv_buffer = io.StringIO()
-                    df.to_csv(csv_buffer, index=False)
-                    st.download_button(
-                        label="Export to CSV",
-                        data=csv_buffer.getvalue(),
-                        file_name="regulatory_news.csv",
-                        mime="text/csv"
-                    )
-                st.table(df)
-                
-            else:
-                st.warning("No data available to export.")
+
+        if df is not None and not df.empty:
+            col1, col2 = st.columns([4, 1])
+            with col2:
+                csv_buffer = io.StringIO()
+                df.to_csv(csv_buffer, index=False)
+                st.download_button(
+                    label="Export to CSV",
+                    data=csv_buffer.getvalue(),
+                    file_name="regulatory_news.csv",
+                    mime="text/csv"
+                )
+            st.table(df)
         else:
             st.warning("No tabular data found in Raw Output.")
         if result.pydantic:
