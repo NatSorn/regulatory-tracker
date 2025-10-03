@@ -113,11 +113,11 @@ scraping_task = Task(
           2. Identify all updates from March 1, 2025 to present
           3. Extract all content including dates, titles
           4. Generate summary of the news
-          4. Extract the link of the specific news in this format, for example1: https://www.centralbank.ie/news/article/the-central-bank-takes-enforcement-action-against-swilly-mulroy-credit-union-for-breaches-of-anti-money-laundering-requirements , for example2: https://www.centralbank.ie/news/article/press-release-derville-rowland-appointed-to-executive-board-of-new-eu-authority-for-anti-money-laundering-23-May-25
-          5. Return the data in a structured format
+          5. Extract the link of the specific news in this format, for example1: https://www.centralbank.ie/news/article/the-central-bank-takes-enforcement-action-against-swilly-mulroy-credit-union-for-breaches-of-anti-money-laundering-requirements , for example2: https://www.centralbank.ie/news/article/press-release-derville-rowland-appointed-to-executive-board-of-new-eu-authority-for-anti-money-laundering-23-May-25
+          6. Return the data in a structured format
           """,
           agent=scraper_agent,
-          tools=[scrape_tool, web_search_tool],
+          tools=[scrape_tool],
           expected_output="A structured dataset containing dates, titles, full text, and links of each relevant updates.",
           output_json=News,
       )
