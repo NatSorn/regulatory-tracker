@@ -71,6 +71,7 @@ searcher_agent = Agent(
 scraper_agent = Agent(
     role='Web Scraper',
     goal='Efficiently scrape and extract search result under News & Media category',
+    goal='Efficiently scrape and extract search result under News & Media category',
     backstory="""You are an expert web scraper specialized in extracting
     information from financial regulatory websites.""",
     verbose=True,
@@ -86,7 +87,7 @@ scraper_agent = Agent(
 #     allow_delegation=False
 # )
 
-# Content Analyzer Agent
+#Content Analyzer Agent
 analyzer_agent = Agent(
     role='Content Analyzer',
     goal=f"""Analyze content for {input} relevance and extract key information. Check if the link is not accessible, do not scrap the content by yourself, but delegate the work back to the Web Scraper Agent and tell the Web Scraper Agent to make sure to get the correct link""",
@@ -118,7 +119,7 @@ scraping_task = Task(
           """,
           agent=scraper_agent,
           tools=[scrape_tool],
-          expected_output="A structured dataset containing dates, titles, full text, and full URL link of each relevant updates.",
+          expected_output="A structured dataset containing dates, titles, full text, and links of each relevant updates.",
           output_json=News,
       )
 
@@ -151,7 +152,7 @@ analysis_task = Task(
 
 crew = Crew(
             agents=[searcher_agent, scraper_agent, analyzer_agent],
-            tasks=[searching_task, scraping_task,analysis_task],
+            tasks=[searching_task, scraping_task, analysis_task],
             memory=True,
             verbose=True,
         )
@@ -161,6 +162,7 @@ import pandas as pd
 from datetime import datetime
 import io
 import streamlit as st
+import re
 
 if submit and input:
 
@@ -175,6 +177,21 @@ if submit and input:
             elif isinstance(result.raw, dict):
                 df = pd.DataFrame([result.raw])
             elif isinstance(result.raw, str):
+                # Try to extract all JSON arrays or objects from the string
+                matches = re.findall(r'(\{.*?\}|\[.*?\])', result.raw, re.DOTALL)
+                for match in matches:
+                    try:
+                        raw_json = json.loads(match)
+                        if isinstance(raw_json, list):
+                            df = pd.DataFrame(raw_json)
+                            break
+                        elif isinstance(raw_json, dict):
+                            df = pd.DataFrame([raw_json])
+                            break
+                    except Exception:
+                        continue
+                if df is None:
+                    raise ValueError("No valid JSON found in Raw Output.")
                 # Try to extract all JSON arrays or objects from the string
                 matches = re.findall(r'(\{.*?\}|\[.*?\])', result.raw, re.DOTALL)
                 for match in matches:
