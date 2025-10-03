@@ -39,7 +39,7 @@ web_search_tool = WebsiteSearchTool(
 
 )
 
-url_scrape_tool = ScrapeElementFromWebsiteTool()
+# url_scrape_tool = ScrapeElementFromWebsiteTool()
 
 scrape_validate_link_tool = ScrapeWebsiteTool()
 web_search_validate_link_tool = WebsiteSearchTool()
@@ -111,14 +111,14 @@ scraping_task = Task(
           description="""
           1. Visit the search result under News & Media category 
           2. Identify all updates from March 1, 2025 to present
-          3. Scrape all content including dates, titles
-          4. Scrape the url in the span.path element of each news from the search result by using the Scrape Element From Website Tool
-          5. Generate summary of the news
-          6. Return the data in a structured format
+          3. Extract all content including dates, titles
+          4. Generate summary of the news
+          4. Extract the link of the specific news in this format, for example1: https://www.centralbank.ie/news/article/the-central-bank-takes-enforcement-action-against-swilly-mulroy-credit-union-for-breaches-of-anti-money-laundering-requirements , for example2: https://www.centralbank.ie/news/article/press-release-derville-rowland-appointed-to-executive-board-of-new-eu-authority-for-anti-money-laundering-23-May-25
+          5. Return the data in a structured format
           """,
           agent=scraper_agent,
-          tools=[scrape_tool],
-          expected_output="A structured dataset containing dates, titles, full text, and full URL link of each relevant updates.",
+          tools=[scrape_tool, web_search_tool],
+          expected_output="A structured dataset containing dates, titles, full text, and links of each relevant updates.",
           output_json=News,
       )
 
@@ -190,10 +190,8 @@ if submit and input:
             if not df.empty:
                 # Create two columns: left for table, right for export button
                 col1, col2 = st.columns([4, 1])
-                with col1:
-                    # st.dataframe(df)
-                    st.table(df)
                 with col2:
+                    # st.dataframe(df)
                     csv_buffer = io.StringIO()
                     df.to_csv(csv_buffer, index=False)
                     st.download_button(
@@ -202,6 +200,8 @@ if submit and input:
                         file_name="regulatory_news.csv",
                         mime="text/csv"
                     )
+                st.table(df)
+                
             else:
                 st.warning("No data available to export.")
         else:
