@@ -71,7 +71,6 @@ searcher_agent = Agent(
 scraper_agent = Agent(
     role='Web Scraper',
     goal='Efficiently scrape and extract search result under News & Media category',
-    goal='Efficiently scrape and extract search result under News & Media category',
     backstory="""You are an expert web scraper specialized in extracting
     information from financial regulatory websites.""",
     verbose=True,
